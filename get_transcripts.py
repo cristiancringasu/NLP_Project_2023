@@ -11,10 +11,11 @@ from selenium.webdriver.support import expected_conditions as EC
 
 data_path = pathlib.Path(__file__).parent / 'data'
 talkcorpus_path = data_path / 'talkcorpus'
-with_transcript_path = data_path / 'with_transcript'
 
 MIN_TALK_LENGTH = 8 * 60  # 8 minutes in seconds
 MAX_TALK_LENGTH = 20 * 60  # 20 minutes in seconds
+
+audience_response = ['laughter', 'applause', 'cheering', 'none']
 
 
 def init_webpage(url):
@@ -184,7 +185,7 @@ def complete_talkcorpus(files=None):
                         break
                     elif transcript:
                         transcript[-1]['annotation'] = stripped[1:-1]  # remove ()
-                    # else the annotation doesn't refer to anything that was just said (eg: applause before the speaker starts the speach) and is ignored
+                    # else the annotation doesn't refer to anything that was just said (eg: applause before the speaker starts the speech) and is ignored
 
                 else:
                     if any(char in stripped for char in
@@ -275,10 +276,10 @@ def complete_talkcorpus(files=None):
 
         corpus.append(metadata)
 
-    with open(with_transcript_path / 'corpus.json', 'w', encoding='utf-8') as with_transcript:
+    with open(data_path / 'corpus.json', 'w', encoding='utf-8') as with_transcript:
         json.dump(corpus, with_transcript, indent=4)
 
-    with open(with_transcript_path / '_not_completed.log', 'w', encoding='utf-8') as abandoned:
+    with open(data_path / '_not_completed.log', 'w', encoding='utf-8') as abandoned:
         if wrong_length:
             abandoned.write('The following talks were too short or too long:\n' + '\n'.join(wrong_length))
             abandoned.write('\n\n')
@@ -295,16 +296,61 @@ def complete_talkcorpus(files=None):
             abandoned.write('\n\n')
 
 
-# def cleanup_transcripts():
-#     if any(char in nr_as_str for char in ('\u266A', '\u266B', '\u266C', '\u266D', '\u266E', '\u266F')):
+def cleanup_corpus():
+    corpus = open(data_path / 'corpus.json', 'r', encoding='utf-8').read()
+
+    # Make sure each sentence has a space after its punctuation mark
+    pattern = r'(?<=[.,;?!])(?=[^\s])'
+
+    for ted_talk in corpus:
+        # Discard talk length as string
+        if 'Length' in ted_talk:
+            del ted_talk['Length']
+
+        ted_talk['likes_per_view'] = ted_talk['like_count'] / ted_talk['view_count']
+
+        transcript = ted_talk['raw_transcript'].lower()
+        # Add a space after each punctuation mark that is followed by a lowercase letter
+        transcript = re.sub(pattern, ' ', transcript)
+
+        # Update the transcript in the TED talk dictionary
+        ted_talk['raw_transcript'] = transcript
+
+
+        # Count audience responses
+        total_responses = {'laughter': 0, 'applause': 0, 'cheering': 0}
+
+        for sentence in ted_talk['transcript']:
+            if ' ' in sentence['annotation']:
+                annotations = sentence['annotation'].split()
+                annotations.sort()
+                parsed_annotation = []
+
+                for annotation in annotations:
+                    if annotation in audience_response and annotation != 'none':
+                        total_responses[annotation] += 1
+                        parsed_annotation.append(annotation)
+                if not parsed_annotation:
+                    sentence['annotation'] = ['none']
+                else:
+                    sentence['annotation'] = parsed_annotation
+                        
+            elif sentence['annotation'] in audience_response:
+                if sentence['annotation'] != 'none':
+                    total_responses[sentence['annotation']] += 1
+                sentence['annotation'] = [sentence['annotation']]
+            else:
+                # remove annotations that don't describe a reaction from the audience
+                sentence['annotation'] = ['none']
+
+        ted_talk['total_responses'] = total_responses
+
+
+    with open(data_path / 'formatted_corpus.json', 'w') as pretty_corpus:
+        json.dump(corpus, pretty_corpus, indent=4)
 
 
 if __name__ == '__main__':
-    # get_talkcorpus()
+    get_talkcorpus()
     complete_talkcorpus()
-    # leftover = []
-    # for file in talkcorpus_path.iterdir():
-    #     filename = str(file)[len(str(talkcorpus_path)) + 1:]
-    #     if not (with_transcript_path / filename).exists():
-    #         leftover.append(file)
-    # complete_talkcorpus(leftover)
+    cleanup_corpus()
