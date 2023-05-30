@@ -1,2 +1,6 @@
 # Mac junk files
 .DS_Store
+models/*
+logs/*
+save_pid.txt
+server.log
