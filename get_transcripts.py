@@ -11,6 +11,7 @@ from selenium.webdriver.support import expected_conditions as EC
 
 data_path = pathlib.Path(__file__).parent / 'data'
 talkcorpus_path = data_path / 'talkcorpus'
+with_transcript_path = data_path / 'withtranscript'
 
 MIN_TALK_LENGTH = 8 * 60  # 8 minutes in seconds
 MAX_TALK_LENGTH = 20 * 60  # 20 minutes in seconds
